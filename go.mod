@@ -1,3 +1,3 @@
-module github.com/kie-kei/reg-go-in-eureka
+module github.com/kie-kei/RegisterGoInEureka
 
 go 1.22
