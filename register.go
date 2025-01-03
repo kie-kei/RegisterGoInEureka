@@ -4,8 +4,24 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 )
+
+func getLocalIP() (string, error) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "", fmt.Errorf("ошибка при получении интерфейсов: %v", err)
+	}
+
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && ipnet.IP.To4() != nil {
+			return ipnet.IP.String(), nil
+		}
+	}
+
+	return "", fmt.Errorf("не удалось найти локальный IP-адрес")
+}
 
 type EurekaConfig struct {
 	EurekaURL        string
@@ -14,13 +30,13 @@ type EurekaConfig struct {
 	HostName         string
 	IPAddr           string
 	Port             int
-	SecurePort       int // Теперь это необязательный параметр
+	SecurePort       int
 	StatusPageUrl    string
 	HomePageUrl      string
 	HealthCheckUrl   string
 	VipAddress       string
 	SecureVipAddress string
-	DataCenterName   string // Новый параметр
+	DataCenterName   string
 }
 
 type EurekaInstance struct {
@@ -39,7 +55,7 @@ type EurekaInstance struct {
 		} `json:"port"`
 		SecurePort struct {
 			Value int `json:"$"`
-		} `json:"securePort,omitempty"` // Убираем обязательность для SecurePort
+		} `json:"securePort,omitempty"`
 		DataCenterInfo struct {
 			Class string `json:"@class"`
 			Name  string `json:"name"`
@@ -48,6 +64,14 @@ type EurekaInstance struct {
 }
 
 func RegisterInstance(config EurekaConfig) error {
+	if config.IPAddr == "" {
+		ip, err := getLocalIP()
+		if err != nil {
+			return fmt.Errorf("не удалось получить локальный IP-адрес: %v", err)
+		}
+		config.IPAddr = ip
+	}
+
 	if config.HomePageUrl == "" {
 		config.HomePageUrl = config.StatusPageUrl
 	}
@@ -64,7 +88,6 @@ func RegisterInstance(config EurekaConfig) error {
 		config.DataCenterName = "MyOwn"
 	}
 
-	// Формируем структуру запроса
 	instance := EurekaInstance{}
 	instance.Instance.InstanceId = config.InstanceId
 	instance.Instance.App = config.AppName
@@ -76,7 +99,6 @@ func RegisterInstance(config EurekaConfig) error {
 	instance.Instance.VipAddress = config.VipAddress
 	instance.Instance.SecureVipAddress = config.SecureVipAddress
 	instance.Instance.Port.Value = config.Port
-
 	if config.SecurePort != 0 {
 		instance.Instance.SecurePort.Value = config.SecurePort
 	}
@@ -88,7 +110,6 @@ func RegisterInstance(config EurekaConfig) error {
 		return fmt.Errorf("Ошибка при маршалинге данных: %v", err)
 	}
 
-	// Отправляем запрос на регистрацию в Eureka
 	resp, err := http.Post(config.EurekaURL+"/apps/"+config.AppName, "application/json", bytes.NewBuffer(data))
 	if err != nil {
 		return fmt.Errorf("Ошибка при отправке запроса на регистрацию: %v", err)
