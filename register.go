@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 )
 
 func getLocalIP() (string, error) {
@@ -71,12 +72,17 @@ func RegisterInstance(config EurekaConfig) error {
 		}
 		config.IPAddr = ip
 	}
-
+	baseUrl := "http://" + config.IPAddr + ":" + strconv.Itoa(config.Port)
+	config.StatusPageUrl = baseUrl + config.StatusPageUrl
 	if config.HomePageUrl == "" {
 		config.HomePageUrl = config.StatusPageUrl
+	} else {
+		config.HomePageUrl = baseUrl + config.HomePageUrl
 	}
 	if config.HealthCheckUrl == "" {
 		config.HealthCheckUrl = config.StatusPageUrl
+	} else {
+		config.HealthCheckUrl = baseUrl + config.HealthCheckUrl
 	}
 	if config.VipAddress == "" {
 		config.VipAddress = config.AppName
